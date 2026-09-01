@@ -1,0 +1,119 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  passwordHash        String
+  name                String
+  businessName        String?
+  businessEmail       String?
+  businessPhone       String?
+  businessAddress     String?
+  businessLogo        String?
+  taxId               String?
+  currency            String   @default("USD")
+  currencySymbol      String   @default("$")
+  invoicePrefix       String   @default("INV-")
+  nextInvoiceNumber   Int      @default(1)
+  defaultPaymentTerms String?  @default("Payment is due within 14 days of invoice date.")
+  defaultNotes        String?  @default("Thank you for your business! Please reach out if you have any questions.")
+  defaultBankDetails  String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  clients  Client[]
+  invoices Invoice[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  email     String
+  company   String?
+  address   String?
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@index([userId])
+}
+
+model Invoice {
+  id               String    @id @default(cuid())
+  shareToken       String    @unique @default(uuid())
+  userId           String
+  clientId         String
+  invoiceNumber    String
+  status           String    @default("draft") // 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+  issueDate        DateTime
+  dueDate          DateTime
+  currency         String    @default("USD")
+  currencySymbol   String    @default("$")
+  subtotal         Float     @default(0)
+  taxRate          Float     @default(0)
+  taxAmount        Float     @default(0)
+  discountType     String?   @default("percentage") // 'percentage' | 'fixed'
+  discountValue    Float     @default(0)
+  discountAmount   Float     @default(0)
+  shippingAmount   Float     @default(0)
+  totalAmount      Float     @default(0)
+  amountPaid       Float     @default(0)
+  notes            String?
+  paymentTerms     String?
+  bankDetails      String?
+  sentAt           DateTime?
+  viewedAt         DateTime?
+  paidAt           DateTime?
+  paymentMethod    String?
+  paymentReference String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client     Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items      InvoiceItem[]
+  activities InvoiceActivity[]
+
+  @@index([userId])
+  @@index([clientId])
+  @@index([status])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Float   @default(1)
+  unitRate    Float   @default(0)
+  amount      Float   @default(0)
+  order       Int     @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model InvoiceActivity {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  type        String // 'created' | 'updated' | 'sent' | 'viewed' | 'payment_received' | 'reminder_sent'
+  description String
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
