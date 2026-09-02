@@ -48,7 +48,7 @@ export async function POST(
     const reminderType = nextCount === 2 ? 'reminder_7d' : 'reminder_14d';
     const reminderLabel = nextCount === 2 ? '7-Day Follow-up' : '14-Day Final Notice';
 
-    // Send email via free Ethereal Email service
+    // Send real email via Nodemailer SMTP
     let emailResult = null;
     try {
       emailResult = await sendInvoiceEmail({
@@ -75,7 +75,7 @@ export async function POST(
         emailType: reminderType,
       });
     } catch (err: any) {
-      console.error('Reminder send error:', err);
+      console.error('Nodemailer reminder send error:', err);
     }
 
     const updated = await prisma.invoice.update({
@@ -92,7 +92,6 @@ export async function POST(
               clientEmail: invoice.client.email,
               reminderStage: nextCount,
               messageId: emailResult?.messageId || null,
-              previewUrl: emailResult?.previewUrl || null,
             }),
           },
         },
@@ -111,7 +110,6 @@ export async function POST(
       message: `Payment reminder sent to ${invoice.client.name} (${reminderLabel} - ${nextCount}/3 notifications sent)`,
       invoice: updated,
       reminderCount: nextCount,
-      previewUrl: emailResult?.previewUrl || null,
     });
   } catch (error: any) {
     console.error('Send reminder error:', error);

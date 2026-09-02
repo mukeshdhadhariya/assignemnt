@@ -33,7 +33,7 @@ export async function POST(
 
     const targetEmail = recipientEmail || invoice.client.email;
 
-    // Send email via free Ethereal Email service
+    // Send real email via Nodemailer SMTP
     let emailResult = null;
     try {
       emailResult = await sendInvoiceEmail({
@@ -62,7 +62,7 @@ export async function POST(
         customMessage,
       });
     } catch (err: any) {
-      console.error('Email send error:', err);
+      console.error('Nodemailer send error:', err);
     }
 
     // Update status to 'sent' if it was draft, update reminderCount to at least 1 (Stage 1)
@@ -84,7 +84,6 @@ export async function POST(
               recipient: targetEmail,
               subject: customSubject || `Invoice ${invoice.invoiceNumber}`,
               messageId: emailResult?.messageId || null,
-              previewUrl: emailResult?.previewUrl || null,
               sentAt: new Date().toISOString(),
             }),
           },
@@ -103,7 +102,6 @@ export async function POST(
       success: true,
       message: `Invoice successfully sent to ${targetEmail}`,
       invoice: updated,
-      previewUrl: emailResult?.previewUrl || null,
       emailResult,
     });
   } catch (error: any) {

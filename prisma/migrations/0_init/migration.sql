@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS "Invoice" (
     "sentAt" TIMESTAMP(3),
     "viewedAt" TIMESTAMP(3),
     "paidAt" TIMESTAMP(3),
+    "reminderCount" INTEGER NOT NULL DEFAULT 0,
+    "lastReminderSentAt" TIMESTAMP(3),
     "paymentMethod" TEXT,
     "paymentReference" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

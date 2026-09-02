@@ -1,53 +1,34 @@
 import nodemailer from 'nodemailer';
 import { formatCurrency, formatDate } from './utils';
 
-// Global singleton for Ethereal transporter
-let cachedTransporter: nodemailer.Transporter | null = null;
+// Global singleton for Nodemailer SMTP Transporter
+let transporterInstance: nodemailer.Transporter | null = null;
 
-async function getEtherealTransporter(): Promise<nodemailer.Transporter> {
-  if (cachedTransporter) {
-    return cachedTransporter;
+function getTransporter(): nodemailer.Transporter {
+  if (transporterInstance) {
+    return transporterInstance;
   }
 
-  // Check if Ethereal credentials are provided in .env
-  const user = process.env.ETHEREAL_USER;
-  const pass = process.env.ETHEREAL_PASS;
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+  const user = process.env.SMTP_USER || '';
+  const pass = process.env.SMTP_PASS || '';
 
-  if (user && pass && user !== 'your-ethereal-user') {
-    cachedTransporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: { user, pass },
-    });
-    return cachedTransporter;
-  }
+  transporterInstance = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user,
+      pass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
 
-  // Automatically create a free Ethereal test account on-the-fly
-  try {
-    const testAccount = await nodemailer.createTestAccount();
-    console.log(`[Ethereal Email] Initialized free test account: ${testAccount.user}`);
-
-    cachedTransporter = nodemailer.createTransport({
-      host: testAccount.smtp.host,
-      port: testAccount.smtp.port,
-      secure: testAccount.smtp.secure,
-      auth: {
-        user: testAccount.user,
-        pass: testAccount.pass,
-      },
-    });
-
-    return cachedTransporter;
-  } catch (err) {
-    console.warn('[Ethereal Email] Failed to create test account on-the-fly, using stream fallback:', err);
-    cachedTransporter = nodemailer.createTransport({
-      streamTransport: true,
-      newline: 'windows',
-      buffer: true,
-    });
-    return cachedTransporter;
-  }
+  return transporterInstance;
 }
 
 export interface EmailInvoiceData {
@@ -100,6 +81,7 @@ export async function sendInvoiceEmail({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const portalUrl = `${appUrl}/i/${invoice.shareToken}`;
   const senderName = user.businessName || user.name || 'Studio Apex';
+  const fromAddress = process.env.SMTP_FROM || `"${senderName}" <${process.env.SMTP_USER || 'billing@billflow.dev'}>`;
   const formattedAmount = formatCurrency(invoice.totalAmount, invoice.currency, invoice.currencySymbol);
   const formattedDueDate = formatDate(invoice.dueDate);
 
@@ -133,7 +115,7 @@ export async function sendInvoiceEmail({
     }
   }
 
-  // Modern Responsive HTML Email Template
+  // Production-grade Responsive HTML Email Template
   const html = `
     <!DOCTYPE html>
     <html>
@@ -216,29 +198,23 @@ export async function sendInvoiceEmail({
   `;
 
   try {
-    const transporter = await getEtherealTransporter();
+    const transporter = getTransporter();
 
     const info = await transporter.sendMail({
-      from: `"${senderName}" <billing@billflow.dev>`,
+      from: fromAddress,
       to: client.email,
       subject,
       html,
     });
 
-    const previewUrl = nodemailer.getTestMessageUrl(info) || null;
-
-    if (previewUrl) {
-      console.log(`\n📬 [Ethereal Email Sent] -> View in browser: ${previewUrl}\n`);
-    }
+    console.log(`[Nodemailer SMTP] Email successfully sent to ${client.email} | Message ID: ${info.messageId}`);
 
     return {
       success: true,
       messageId: info.messageId,
-      previewUrl,
-      provider: 'ethereal',
     };
   } catch (err: any) {
-    console.error('Ethereal email sending error:', err);
+    console.error('[Nodemailer SMTP Error] Failed to send email:', err);
     return {
       success: false,
       error: err.message,
