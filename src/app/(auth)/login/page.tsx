@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Mail, Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -11,7 +10,6 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const router = useRouter();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,8 +26,6 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
       await login(email, password);
-      toast.success('Signed in successfully.');
-      router.push('/dashboard');
     } catch (err: any) {
       toast.error(err.message || 'Invalid email or password.');
     } finally {

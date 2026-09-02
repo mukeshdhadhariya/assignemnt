@@ -85,6 +85,8 @@ export interface InvoiceType {
   sentAt?: string | Date | null;
   viewedAt?: string | Date | null;
   paidAt?: string | Date | null;
+  reminderCount?: number;
+  lastReminderSentAt?: string | Date | null;
   paymentMethod?: string | null;
   paymentReference?: string | null;
   createdAt: string | Date;

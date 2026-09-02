@@ -36,6 +36,7 @@ export function InvoiceActions({ invoice, onUpdate }: InvoiceActionsProps) {
   const effectiveStatus = invoice.effectiveStatus || invoice.status;
   const isPaid = effectiveStatus === 'paid';
   const isOverdue = effectiveStatus === 'overdue';
+  const reminderCount = invoice.reminderCount || 0;
 
   // Copy Public Client Link
   const handleCopyLink = () => {
@@ -115,8 +116,13 @@ export function InvoiceActions({ invoice, onUpdate }: InvoiceActionsProps) {
     }
   };
 
-  // Send Payment Reminder
+  // Send Payment Reminder (up to 3 times)
   const handleSendReminder = async () => {
+    if (reminderCount >= 3) {
+      toast.error('Maximum 3 email notifications have already been sent for this invoice.');
+      return;
+    }
+
     try {
       setIsReminding(true);
       const res = await fetch(`/api/invoices/${invoice.id}/remind`, {
@@ -129,7 +135,7 @@ export function InvoiceActions({ invoice, onUpdate }: InvoiceActionsProps) {
         return;
       }
 
-      toast.success(`Payment reminder sent to ${invoice.client?.email}!`);
+      toast.success(data.message || `Payment reminder sent (${data.reminderCount}/3 notifications)`);
       onUpdate(data.invoice);
     } catch (err) {
       toast.error('Error sending reminder');
@@ -180,7 +186,7 @@ export function InvoiceActions({ invoice, onUpdate }: InvoiceActionsProps) {
           onClick={() => setIsSendModalOpen(true)}
           leftIcon={<Send className="h-4 w-4" />}
         >
-          Send by Email
+          Send Email
         </Button>
 
         {/* Copy Shareable Link */}
@@ -222,16 +228,22 @@ export function InvoiceActions({ invoice, onUpdate }: InvoiceActionsProps) {
           </Button>
         )}
 
-        {/* Send Reminder (if overdue or unpaid) */}
+        {/* Send Reminder (if unpaid, up to 3 times total: initial, +7d, +14d) */}
         {!isPaid && (
           <Button
             variant="outline"
             size="sm"
             onClick={handleSendReminder}
             isLoading={isReminding}
+            disabled={reminderCount >= 3}
             leftIcon={<BellRing className="h-4 w-4 text-amber-500" />}
+            title={reminderCount >= 3 ? 'Maximum 3 notifications sent' : 'Send follow-up reminder email'}
           >
-            Send Reminder
+            {reminderCount >= 3
+              ? 'Reminders Sent (3/3)'
+              : reminderCount > 0
+              ? `Send Reminder (${reminderCount}/3)`
+              : 'Send Reminder'}
           </Button>
         )}
 

@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Mail, Lock, User, Building2, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -11,7 +10,6 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 
 export default function SignupPage() {
-  const router = useRouter();
   const { signup } = useAuth();
   const [name, setName] = useState('');
   const [businessName, setBusinessName] = useState('');
@@ -40,8 +38,6 @@ export default function SignupPage() {
         email,
         password,
       });
-      toast.success('Account created successfully!');
-      router.push('/dashboard');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create account.');
     } finally {

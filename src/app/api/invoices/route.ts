@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
 import { invoiceSchema } from '@/lib/validation';
 import { calculateInvoiceTotals, getEffectiveStatus } from '@/lib/utils';
+import { sendInvoiceEmail } from '@/lib/email';
 import { isPast, isToday } from 'date-fns';
 
 export async function GET(req: Request) {
@@ -129,9 +130,14 @@ export async function POST(req: Request) {
     const data = result.data;
 
     // Verify client belongs to user
-    const client = await prisma.client.findFirst({
-      where: { id: data.clientId, userId: session.userId },
-    });
+    const [client, userProfile] = await Promise.all([
+      prisma.client.findFirst({
+        where: { id: data.clientId, userId: session.userId },
+      }),
+      prisma.user.findUnique({
+        where: { id: session.userId },
+      }),
+    ]);
 
     if (!client) {
       return NextResponse.json({ error: 'Selected client does not exist' }, { status: 400 });
@@ -155,6 +161,8 @@ export async function POST(req: Request) {
       initialStatus = 'overdue';
     }
 
+    const isSendingNow = initialStatus === 'sent';
+
     // Create Invoice & Line Items in a transaction
     const invoice = await prisma.$transaction(async (tx) => {
       const created = await tx.invoice.create({
@@ -177,7 +185,9 @@ export async function POST(req: Request) {
           totalAmount: calculations.totalAmount,
           amountPaid: initialStatus === 'paid' ? calculations.totalAmount : 0,
           paidAt: initialStatus === 'paid' ? new Date() : null,
-          sentAt: initialStatus === 'sent' ? new Date() : null,
+          sentAt: isSendingNow ? new Date() : null,
+          reminderCount: isSendingNow ? 1 : 0, // Stage 1 (1/3 notifications sent)
+          lastReminderSentAt: isSendingNow ? new Date() : null,
           notes: data.notes || null,
           paymentTerms: data.paymentTerms || null,
           bankDetails: data.bankDetails || null,
@@ -191,10 +201,24 @@ export async function POST(req: Request) {
             })),
           },
           activities: {
-            create: {
-              type: 'created',
-              description: `Invoice ${data.invoiceNumber} created for ${client.company || client.name}`,
-            },
+            create: [
+              {
+                type: 'created',
+                description: `Invoice ${data.invoiceNumber} created for ${client.company || client.name}`,
+              },
+              ...(isSendingNow
+                ? [
+                    {
+                      type: 'sent',
+                      description: `Invoice instantly dispatched to ${client.email} (Initial Dispatch: 1/3)`,
+                      metadata: JSON.stringify({
+                        recipient: client.email,
+                        sentAt: new Date().toISOString(),
+                      }),
+                    },
+                  ]
+                : []),
+            ],
           },
         },
         include: {
@@ -213,6 +237,33 @@ export async function POST(req: Request) {
 
       return created;
     });
+
+    // If initial status was 'sent', dispatch Nodemailer email asynchronously
+    if (isSendingNow && userProfile) {
+      sendInvoiceEmail({
+        invoice: {
+          invoiceNumber: invoice.invoiceNumber,
+          shareToken: invoice.shareToken,
+          totalAmount: invoice.totalAmount,
+          currency: invoice.currency,
+          currencySymbol: invoice.currencySymbol,
+          dueDate: invoice.dueDate,
+          issueDate: invoice.issueDate,
+          items: invoice.items,
+        },
+        client: {
+          name: client.name,
+          email: client.email,
+          company: client.company,
+        },
+        user: {
+          name: userProfile.name,
+          businessName: userProfile.businessName,
+          businessEmail: userProfile.businessEmail,
+        },
+        emailType: 'initial',
+      }).catch((err) => console.error('Instant email delivery error:', err));
+    }
 
     return NextResponse.json({ success: true, invoice }, { status: 201 });
   } catch (error: any) {
